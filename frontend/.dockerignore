@@ -1,6 +1,12 @@
-.vercel
+.git
+.next
+node_modules
+
 .env
 .env.local
 .env.production
 .env.*
 !.env.example
+
+*.log
+*.tsbuildinfo
