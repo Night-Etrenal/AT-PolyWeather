@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { buildProxyExceptionResponse } from "@/lib/api-proxy";
 import {
   applyAuthResponseCookies,
   buildBackendRequestHeaders,
+  buildJsonBackendRequestHeaders,
 } from "@/lib/backend-auth";
-import { buildProxyExceptionResponse } from "@/lib/api-proxy";
 import { requireOpsProxyAuth } from "@/lib/ops-proxy-auth";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
-export async function GET(req: NextRequest) {
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ caseId: string }> },
+) {
   if (!API_BASE) {
     return NextResponse.json(
       { error: "POLYWEATHER_API_BASE_URL is not configured" },
@@ -21,27 +25,29 @@ export async function GET(req: NextRequest) {
     const authError = requireOpsProxyAuth(req, auth);
     if (authError) return authError;
 
-    const url = new URL(`${API_BASE}/api/ops/payments/incidents`);
-    req.nextUrl.searchParams.forEach((value, key) => {
-      url.searchParams.set(key, value);
-    });
-
-    const res = await fetch(url.toString(), {
-      headers: auth.headers,
-      cache: "no-store",
-    });
+    const resolved = await params;
+    const body = await req.text();
+    const res = await fetch(
+      `${API_BASE}/api/ops/refunds/${encodeURIComponent(resolved.caseId)}`,
+      {
+        method: "PATCH",
+        cache: "no-store",
+        headers: buildJsonBackendRequestHeaders(auth.headers),
+        body,
+      },
+    );
     const raw = await res.text();
     const response = new NextResponse(raw, {
       status: res.status,
       headers: {
-        "Content-Type": res.headers.get("content-type") || "application/json",
         "Cache-Control": "no-store",
+        "Content-Type": res.headers.get("content-type") || "application/json",
       },
     });
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {
     return buildProxyExceptionResponse(error, {
-      publicMessage: "Failed to fetch payment incidents",
+      publicMessage: "Failed to update refund case",
     });
   }
 }
